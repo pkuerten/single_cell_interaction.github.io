@@ -72,23 +72,11 @@ LoadData("ifnb")
 
 ## Read in the dataset and Create a Seurat objects
 
-The first step is to read the data from the `SeuratData` package. The data is split based on sample and individually `SCtranform` is applied
-
-10X sequencing data and convert it to a seurat
-object. The Seurat object serves as a container that initially holds
-just the UMI count matrix. But throughout the workshop, we add further
-analysis content to it (e.g. PCA, clustering results). You can learn
-more about the `Seurat object` from
-[here](https://github.com/satijalab/seurat/wiki/Seurat#object-information).
-
-We begin by reading the count matrix using `Read10X_h5 reads` count
-matrix from 10X CellRanger hdf5 file. The Hierarchical Data Format (HDF5
-or H5) format provides a more compressed representation of the data.
-Seurat package includes multiple read functions depending on the format.
-
-While reading the data, we apply rudimentary quality control to discard
-low quality cells with less than 200 expressed features (genes) and
-lowly expressed features observed in less than 3 cells.
+The first step is to read the data from the `SeuratData` package. The input data is split based on sample and individually `SCtranform` is applied. Notice
+this replaces the `NormalizeData`, `ScaleData`, and `FindVariableFeatures`. SCTransform is a statistical approach specifically designed for single cell UMI 
+count data. It overcomes some of the overfitting limitations of prior bulk designed normalization methods. More details of its advantages can be found in 
+[SCtranform manuscript](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1874-1). Notice that we applied no quality control steps. This 
+is because the data was precleaned obviating the need to repeat these steps.
 
 ``` r
 ifnb.list <- SplitObject(ifnb, split.by = "stim")
