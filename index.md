@@ -28,46 +28,53 @@ to generate the input data for interaction analysis. It assumes you are familiar
 Let’s start by installing the necessary packages one by one
 
 ``` r
-# install packages
-install.packages("Seurat",repos = "http://cran.us.r-project.org")
-```
-
-``` r
-install.packages("hdf5r",repos = "http://cran.us.r-project.org")
-```
-
-``` r
-install.packages("clustree",repos = "http://cran.us.r-project.org")
+# I needed to install limma separately
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("limma")
 ```
 
 ``` r
 if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager",repos = "http://cran.us.r-project.org")
+    install.packages("BiocManager")
+BiocManager::install("glmGamPoi")
+
 ```
 
 ``` r
-BiocManager::install("SingleR")
+# install.packages("devtools")
+devtools::install_github('satijalab/seurat-data')
+```
+```r
+devtools::install_github("saeyslab/nichenetr")
+
 ```
 
 ``` r
-BiocManager::install("celldex")
+install.packages("tidyverse")
+
+```
+
+``` r
+install.packages("dplyr")
 ```
 
 And loading them into R.
 
 ``` r
 # load into your session
-library(dplyr)
+library(SeuratData)
 library(Seurat)
-library(patchwork)
-library(clustree)
-library(SingleR)
-library(celldex)
+
+# load dataset
+LoadData("ifnb")
 ```
 
-## Read in the dataset and Create a Seurat object
+## Read in the dataset and Create a Seurat objects
 
-The first step is to read 10X sequencing data and convert it to a seurat
+The first step is to read the data from the `SeuratData` package. The data is split based on sample and individually `SCtranform` is applied
+
+10X sequencing data and convert it to a seurat
 object. The Seurat object serves as a container that initially holds
 just the UMI count matrix. But throughout the workshop, we add further
 analysis content to it (e.g. PCA, clustering results). You can learn
@@ -84,10 +91,11 @@ low quality cells with less than 200 expressed features (genes) and
 lowly expressed features observed in less than 3 cells.
 
 ``` r
-pbmc.data <- Read10X_h5(filename="./SC3_v3_NextGem_DI_PBMC_10K_filtered_feature_bc_matrix.h5")
-pbmc <- CreateSeuratObject(counts = pbmc.data, project = "pbmc10k", min.cells = 3, min.features = 200)
-pbmc[["percent.mt"]] <- PercentageFeatureSet(pbmc, pattern = "^MT-")
-pbmc <- subset(pbmc, subset = nFeature_RNA > 200 & nFeature_RNA < 5000 & percent.mt < 15)
+ifnb.list <- SplitObject(ifnb, split.by = "stim")
+ifnb.list <- lapply(X = ifnb.list, FUN = SCTransform, method = "glmGamPoi")
+features <- SelectIntegrationFeatures(object.list = ifnb.list, nfeatures = 3000)
+ifnb.list <- PrepSCTIntegration(object.list = ifnb.list, anchor.features = features)
+ifnb.list <- lapply(X = ifnb.list, FUN = RunPCA, features = features)
 ```
 
 Next we calculate the percentage contribution of mitochondrial RNA to
