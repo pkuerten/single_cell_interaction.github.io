@@ -124,3 +124,244 @@ We begin by loading the neccessary R packages.
 library(nichenetr)
 library(tidyverse)
 ```
+Next we load the required datasets one-by-one
+
+``` r
+ligand_target_matrix = readRDS("ligand_target_matrix.rds")
+ligand_target_matrix[1:5,1:5]
+```
+```r
+lr_network = readRDS("lr_network.rds")
+head(lr_network)
+```
+```r
+weighted_networks = readRDS("weighted_networks.rds")
+```
+``` r
+weighted_networks_lr = weighted_networks$lr_sig %>% inner_join(lr_network %>% distinct(from,to), by = c("from","to"))
+head(weighted_networks$lr_sig) # interactions and their weights in the ligand-receptor + signaling network
+
+```
+```r
+Idents(immune.combined.sct) <-immune.combined.sct$seurat_annotations
+DefaultAssay(immune.combined.sct) <- "integrated"
+```
+
+For the workshop, we  rely on curated cell annotations provided with the data. We focus on `CD8 T` cells as receiver cells and look for sender ligands in `pDC`, `CD14 Mono`,  `CD16 Mono`,  `NK`, `B`, `DC`, `B Activated` clusters.
+
+<b> Define receiver and sender cell populations</b>. In addition we identify genes expressed in receiver cells which are also part of our knowledgebase. 
+
+💡if a genes is not known to be regulated by any ligand in the database, the method cannot use it in its prediction. 
+
+```r
+receiver = "CD8 T"
+expressed_genes_receiver = get_expressed_genes(receiver, immune.combined.sct, pct = 0.10, assay_oi="RNA")
+background_expressed_genes = expressed_genes_receiver %>% .[. %in% rownames(ligand_target_matrix)]
+```
+```r
+sender_celltypes = c("pDC", "CD14 Mono" ,  "CD16 Mono",  "NK", "B", "DC", "B Activated")
+```
+```r
+list_expressed_genes_sender = sender_celltypes %>% unique() %>% lapply(get_expressed_genes, immune.combined.sct, 0.10, assay_oi="RNA") 
+expressed_genes_sender = list_expressed_genes_sender %>% unlist() %>% unique()
+```
+
+<b>Define differential genes in receiver </b> with respect to the sample treatment
+```r
+seurat_obj_receiver= subset(immune.combined.sct, idents = receiver)
+seurat_obj_receiver = SetIdent(immune.combined.sct, value = seurat_obj_receiver[["orig.ident"]])
+```
+```r
+condition_oi = "IMMUNE_STIM"
+condition_reference = "IMMUNE_CTRL" 
+```
+```r
+DE_table_receiver = FindMarkers(object = seurat_obj_receiver, ident.1 = condition_oi, ident.2 = condition_reference, min.pct = 0.10, assay="RNA") %>% rownames_to_column("gene")
+```
+```r
+geneset_oi = DE_table_receiver %>% filter(p_val <= 0.05 & abs(avg_log2FC) >= 0.25) %>% pull(gene)
+geneset_oi = geneset_oi %>% .[. %in% rownames(ligand_target_matrix)]
+```
+
+<b>Define ligand and receptor genes </b> which are expressed in respective clusters. The potential ligand set is narrowed down to ligands with targets 
+expressed in the receiver clusters.
+```r 
+ligands = lr_network %>% pull(from) %>% unique()
+receptors = lr_network %>% pull(to) %>% unique()
+```
+```r
+expressed_ligands = intersect(ligands,expressed_genes_sender)
+expressed_receptors = intersect(receptors,expressed_genes_receiver)
+```
+```r
+potential_ligands = lr_network %>% filter(from %in% expressed_ligands & to %in% expressed_receptors) %>% pull(from) %>% unique()
+```
+<b>NicheNet ligand activity analysis</b> ranks ligands based on the presence of expressed target genes in the receiver
+```r
+ligand_activities = predict_ligand_activities(geneset = geneset_oi, background_expressed_genes = background_expressed_genes, ligand_target_matrix = ligand_target_matrix, potential_ligands = potential_ligands)
+```
+```r
+ligand_activities = ligand_activities %>% arrange(-pearson) %>% mutate(rank = rank(desc(pearson)))
+ligand_activities
+```
+```r
+best_upstream_ligands = ligand_activities %>% top_n(20, pearson) %>% arrange(-pearson) %>% pull(test_ligand) %>% unique()
+```
+```r
+DotPlot(immune.combined.sct, features = best_upstream_ligands %>% rev(), cols = "RdYlBu", assay="RNA") + RotatedAxis()
+```
+<b> Infer receptors and top-predicted target genes of ligands</b> that are top-ranked in the ligand activity analysis. This begins by inferring active target genes
+
+```r
+active_ligand_target_links_df = best_upstream_ligands %>% lapply(get_weighted_ligand_target_links,geneset = geneset_oi, ligand_target_matrix = ligand_target_matrix, n = 200) %>% bind_rows() %>% drop_na()
+```
+```r
+active_ligand_target_links = prepare_ligand_target_visualization(ligand_target_df = active_ligand_target_links_df, ligand_target_matrix = ligand_target_matrix, cutoff = 0.33)
+```
+```r
+order_ligands = intersect(best_upstream_ligands, colnames(active_ligand_target_links)) %>% rev() %>% make.names()
+order_targets = active_ligand_target_links_df$target %>% unique() %>% intersect(rownames(active_ligand_target_links)) %>% make.names()
+rownames(active_ligand_target_links) = rownames(active_ligand_target_links) %>% make.names() # make.names() for heatmap visualization of genes like H2-T23
+colnames(active_ligand_target_links) = colnames(active_ligand_target_links) %>% make.names() # make.names() for heatmap visualization of genes like H2-T23
+```
+```r
+vis_ligand_target = active_ligand_target_links[order_targets,order_ligands] %>% t()
+```
+```r
+p_ligand_target_network = vis_ligand_target %>% make_heatmap_ggplot("Prioritized ligands","Predicted target genes", color = "purple",legend_position = "top", x_axis_position = "top",legend_title = "Regulatory potential")  + theme(axis.text.x = element_text(face = "italic")) + scale_fill_gradient2(low = "whitesmoke",  high = "purple", breaks = c(0,0.0045,0.0090))
+p_ligand_target_network
+```
+Next the targets of active ligands are defined. 
+```r
+lr_network_top = lr_network %>% filter(from %in% best_upstream_ligands & to %in% expressed_receptors) %>% distinct(from,to)
+best_upstream_receptors = lr_network_top %>% pull(to) %>% unique()
+```
+```r
+lr_network_top_df_large = weighted_networks_lr %>% filter(from %in% best_upstream_ligands & to %in% best_upstream_receptors)
+```
+```r
+lr_network_top_df = lr_network_top_df_large %>% spread("from","weight",fill = 0)
+lr_network_top_matrix = lr_network_top_df %>% select(-to) %>% as.matrix() %>% magrittr::set_rownames(lr_network_top_df$to)
+```
+```r
+dist_receptors = dist(lr_network_top_matrix, method = "binary")
+hclust_receptors = hclust(dist_receptors, method = "ward.D2")
+order_receptors = hclust_receptors$labels[hclust_receptors$order]
+```
+```r
+dist_ligands = dist(lr_network_top_matrix %>% t(), method = "binary")
+hclust_ligands = hclust(dist_ligands, method = "ward.D2")
+order_ligands_receptor = hclust_ligands$labels[hclust_ligands$order]
+```
+```r
+order_receptors = order_receptors %>% intersect(rownames(lr_network_top_matrix))
+order_ligands_receptor = order_ligands_receptor %>% intersect(colnames(lr_network_top_matrix))
+```
+```r
+vis_ligand_receptor_network = lr_network_top_matrix[order_receptors, order_ligands_receptor]
+rownames(vis_ligand_receptor_network) = order_receptors %>% make.names()
+colnames(vis_ligand_receptor_network) = order_ligands_receptor %>% make.names()
+```
+```r
+p_ligand_receptor_network = vis_ligand_receptor_network %>% t() %>% make_heatmap_ggplot("Ligands","Receptors", color = "mediumvioletred", x_axis_position = "top",legend_title = "Prior interaction potential")
+p_ligand_receptor_network
+```
+The targets are restricted to highly confident curated interactions 
+```r
+lr_network_strict = lr_network %>% filter(database != "ppi_prediction_go" & database != "ppi_prediction")
+ligands_bona_fide = lr_network_strict %>% pull(from) %>% unique()
+receptors_bona_fide = lr_network_strict %>% pull(to) %>% unique()
+```
+```r
+lr_network_top_df_large_strict = lr_network_top_df_large %>% distinct(from,to) %>% inner_join(lr_network_strict, by = c("from","to")) %>% distinct(from,to)
+lr_network_top_df_large_strict = lr_network_top_df_large_strict %>% inner_join(lr_network_top_df_large, by = c("from","to"))
+```
+```r
+lr_network_top_df_strict = lr_network_top_df_large_strict %>% spread("from","weight",fill = 0)
+lr_network_top_matrix_strict = lr_network_top_df_strict %>% select(-to) %>% as.matrix() %>% magrittr::set_rownames(lr_network_top_df_strict$to)
+```
+```r
+dist_receptors = dist(lr_network_top_matrix_strict, method = "binary")
+hclust_receptors = hclust(dist_receptors, method = "ward.D2")
+order_receptors = hclust_receptors$labels[hclust_receptors$order]
+```
+```r
+dist_ligands = dist(lr_network_top_matrix_strict %>% t(), method = "binary")
+hclust_ligands = hclust(dist_ligands, method = "ward.D2")
+order_ligands_receptor = hclust_ligands$labels[hclust_ligands$order]
+```
+```r
+order_receptors = order_receptors %>% intersect(rownames(lr_network_top_matrix_strict))
+order_ligands_receptor = order_ligands_receptor %>% intersect(colnames(lr_network_top_matrix_strict))
+```
+```r
+vis_ligand_receptor_network_strict = lr_network_top_matrix_strict[order_receptors, order_ligands_receptor]
+rownames(vis_ligand_receptor_network_strict) = order_receptors %>% make.names()
+colnames(vis_ligand_receptor_network_strict) = order_ligands_receptor %>% make.names()
+```
+```r
+p_ligand_receptor_network_strict = vis_ligand_receptor_network_strict %>% t() %>% make_heatmap_ggplot("Ligands","Receptors", color = "mediumvioletred", x_axis_position = "top",legend_title = "Prior interaction potential\n(bona fide)")
+p_ligand_receptor_network_strict
+```
+<b>Calculate fold change of ligands</b> in sender clusters
+```r
+DE_table_all = Idents(immune.combined.sct) %>% levels() %>% intersect(sender_celltypes) %>% lapply(get_lfc_celltype, seurat_obj = immune.combined.sct, celltype_col="seurat_annotations", condition_colname = "orig.ident", condition_oi = condition_oi, condition_reference = condition_reference, expression_pct = 0.10) %>% reduce(full_join)
+DE_table_all[is.na(DE_table_all)] = 0
+```
+```r
+ligand_activities_de = ligand_activities %>% select(test_ligand, pearson) %>% rename(ligand = test_ligand) %>% left_join(DE_table_all %>% rename(ligand = gene))
+ligand_activities_de[is.na(ligand_activities_de)] = 0
+```
+```r
+lfc_matrix = ligand_activities_de  %>% select(-ligand, -pearson) %>% as.matrix() %>% magrittr::set_rownames(ligand_activities_de$ligand)
+rownames(lfc_matrix) = rownames(lfc_matrix) %>% make.names()
+```
+```r
+order_ligands = order_ligands[order_ligands %in% rownames(lfc_matrix)]
+vis_ligand_lfc = lfc_matrix[order_ligands,]
+colnames(vis_ligand_lfc) = vis_ligand_lfc %>% colnames() %>% make.names()
+```
+```r
+p_ligand_lfc = vis_ligand_lfc %>% make_threecolor_heatmap_ggplot("Prioritized ligands","LFC in Sender", low_color = "midnightblue",mid_color = "white", mid = median(vis_ligand_lfc), high_color = "red",legend_position = "top", x_axis_position = "top", legend_title = "LFC") + theme(axis.text.y = element_text(face = "italic"))
+p_ligand_lfc = p_ligand_lfc + scale_fill_gradientn(colors = c("midnightblue","blue", "grey95", "grey99","firebrick1","red"),values = c(0,0.1,0.2,0.25, 0.40, 0.7,1), limits = c(vis_ligand_lfc %>% min() - 0.1, vis_ligand_lfc %>% max() + 0.1))
+p_ligand_lfc
+```
+
+<b> Visualization </b> of the complete results
+```r
+ligand_pearson_matrix = ligand_activities %>% select(pearson) %>% as.matrix() %>% magrittr::set_rownames(ligand_activities$test_ligand)
+rownames(ligand_pearson_matrix) = rownames(ligand_pearson_matrix) %>% make.names()
+colnames(ligand_pearson_matrix) = colnames(ligand_pearson_matrix) %>% make.names()
+```
+```r
+vis_ligand_pearson = ligand_pearson_matrix[order_ligands, ] %>% as.matrix(ncol = 1) %>% magrittr::set_colnames("Pearson")
+p_ligand_pearson = vis_ligand_pearson %>% make_heatmap_ggplot("Prioritized ligands","Ligand activity", color = "darkorange",legend_position = "top", x_axis_position = "top", legend_title = "Pearson correlation coefficient\ntarget gene prediction ability)") + theme(legend.text = element_text(size = 9))
+```
+```r
+order_ligands_adapted = order_ligands
+order_ligands_adapted[order_ligands_adapted == "H2.M3"] = "H2-M3" # cf required use of make.names for heatmap visualization | this is not necessary if these ligands are not in the list of prioritized ligands!
+order_ligands_adapted[order_ligands_adapted == "H2.T23"] = "H2-T23" # cf required use of make.names for heatmap visualization | this is not necessary if these ligands are not in the list of prioritized ligands!
+rotated_dotplot = DotPlot(immune.combined.sct %>% subset(seurat_annotations %in% sender_celltypes), features = order_ligands_adapted, cols = "RdYlBu", assay="RNA") + coord_flip() + theme(legend.text = element_text(size = 10), legend.title = element_text(size = 12)) 
+```
+```r
+figures_without_legend = cowplot::plot_grid(
+  p_ligand_pearson + theme(legend.position = "none", axis.ticks = element_blank()) + theme(axis.title.x = element_text()),
+  rotated_dotplot + theme(legend.position = "none", axis.ticks = element_blank(), axis.title.x = element_text(size = 12), axis.text.y = element_text(face = "italic", size = 9), axis.text.x = element_text(size = 9,  angle = 90,hjust = 0)) + ylab("Expression in Sender") + xlab("") + scale_y_discrete(position = "right"),
+  p_ligand_lfc + theme(legend.position = "none", axis.ticks = element_blank()) + theme(axis.title.x = element_text()) + ylab(""),
+  p_ligand_target_network + theme(legend.position = "none", axis.ticks = element_blank()) + ylab(""),
+  align = "hv",
+  nrow = 1,
+  rel_widths = c(ncol(vis_ligand_pearson)+6, ncol(vis_ligand_lfc) + 7, ncol(vis_ligand_lfc) + 8, ncol(vis_ligand_target)))
+
+legends = cowplot::plot_grid(
+    ggpubr::as_ggplot(ggpubr::get_legend(p_ligand_pearson)),
+    ggpubr::as_ggplot(ggpubr::get_legend(rotated_dotplot)),
+    ggpubr::as_ggplot(ggpubr::get_legend(p_ligand_lfc)),
+    ggpubr::as_ggplot(ggpubr::get_legend(p_ligand_target_network)),
+    nrow = 1,
+    align = "h", rel_widths = c(1.5, 1, 1, 1))
+
+combined_plot = cowplot::plot_grid(figures_without_legend, legends, rel_heights = c(10,5), nrow = 2, align = "hv")
+combined_plot
+```
+
