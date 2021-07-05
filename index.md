@@ -526,3 +526,5 @@ combined_plot
 ```
 
 ![](workshop_tuesday_files/figure-gfm/unnamed-chunk-61-1.png)<!-- -->
+
+Finnaly, for those who are insterested in a good read, this is an excellent [paper](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0062366) on the topic.
