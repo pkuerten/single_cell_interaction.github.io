@@ -1,7 +1,7 @@
 Single Cell Workshop - Cell interaction analysis
 ================
-Asif JavedAlexandre Mondaini
-05 July 2021
+Asif Javed, Alexandre Mondaini \|
+06-07-2021
 
 -   [Data download](#data-download)
 -   [Prerequisite](#prerequisite)
@@ -148,7 +148,7 @@ pairs and gene regulatory networks downstream of the targets. In
 particular it aims to define ligands which best explain the differential
 expression observed in target cluster.
 
-We begin by loading the neccessary R packages. :Warning: Some of the
+We begin by loading the neccessary R packages. :warning: Some of the
 `Seurat` integration commands failed to successfully execute after I
 loaded the NicheNet package. There might be some incompatabilities
 between the two packages.
@@ -314,6 +314,7 @@ DotPlot(immune.combined.sct, features = best_upstream_ligands %>% rev(), cols = 
 ```
 
 ![](workshop_tuesday_files/figure-gfm/unnamed-chunk-31-1.png)<!-- -->
+
 <b> Infer receptors and top-predicted target genes of ligands</b> that
 are top-ranked in the ligand activity analysis. This begins by inferring
 active target genes
@@ -349,6 +350,7 @@ p_ligand_target_network
 ```
 
 ![](workshop_tuesday_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
+
 Next the targets of active ligands are defined.
 
 ``` r
@@ -394,6 +396,7 @@ p_ligand_receptor_network
 ```
 
 ![](workshop_tuesday_files/figure-gfm/unnamed-chunk-44-1.png)<!-- -->
+
 The targets are restricted to highly confident curated interactions
 
 ``` r
@@ -441,6 +444,7 @@ p_ligand_receptor_network_strict
 ```
 
 ![](workshop_tuesday_files/figure-gfm/unnamed-chunk-52-1.png)<!-- -->
+
 <b>Calculate fold change of ligands</b> in sender clusters
 
 ``` r
