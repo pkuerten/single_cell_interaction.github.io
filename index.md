@@ -336,6 +336,7 @@ colnames(active_ligand_target_links) = colnames(active_ligand_target_links) %>% 
 
 ``` r
 vis_ligand_target = active_ligand_target_links[order_targets,order_ligands] %>% t()
+rownames(vis_ligand_target) <- order_ligands
 ```
 
 ``` r
@@ -464,8 +465,8 @@ rownames(lfc_matrix) = rownames(lfc_matrix) %>% make.names()
 
 ``` r
 order_ligands = order_ligands[order_ligands %in% rownames(lfc_matrix)]
-vis_ligand_lfc = lfc_matrix[order_ligands,]
-vis_ligand_lfc = as.matrix(vis_ligand_lfc)
+vis_ligand_lfc = as.matrix(lfc_matrix[order_ligands,])
+colnames(vis_ligand_lfc) <- order_ligands
 colnames(vis_ligand_lfc) = vis_ligand_lfc %>% colnames() %>% make.names()
 ```
 
@@ -493,6 +494,7 @@ colnames(ligand_pearson_matrix) = colnames(ligand_pearson_matrix) %>% make.names
 
 ``` r
 vis_ligand_pearson = ligand_pearson_matrix[order_ligands, ] %>% as.matrix(ncol = 1) %>% magrittr::set_colnames("Pearson")
+rownames(vis_ligand_pearson) <- order_ligands
 p_ligand_pearson = vis_ligand_pearson %>% make_heatmap_ggplot("Prioritized ligands","Ligand activity", color = "darkorange",legend_position = "top", x_axis_position = "top", legend_title = "Pearson correlation coefficient\ntarget gene prediction ability)") + theme(legend.text = element_text(size = 9))
 ```
 
