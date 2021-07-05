@@ -529,4 +529,4 @@ combined_plot
 
 ![](workshop_tuesday_files/figure-gfm/unnamed-chunk-61-1.png)<!-- -->
 
-Finnaly, for those who are insterested in a good read, this is an excellent [paper](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0062366) on the topic.
+We began with this dataset as a toy example but it is interesting to see that `EDN1` has been noted to play a role in Interferon Beta response in the following [paper](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0062366).
