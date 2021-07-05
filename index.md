@@ -1,7 +1,13 @@
 Single Cell Workshop - Cell interaction analysis
 ================
-Asif Javed, Alexandre Mondaini \|
-06-07-2021
+Asif Javed
+
+-   [Data download](#data-download)
+-   [Prerequisite](#prerequisite)
+-   [Install packages](#install-packages)
+-   [Read in the dataset and Create a Seurat
+    objects](#read-in-the-dataset-and-create-a-seurat-objects)
+-   [Cell interaction analysis](#cell-interaction-analysis)
 
 -   [Data download](#data-download)
 -   [Prerequisite](#prerequisite)
@@ -172,10 +178,27 @@ ligand_target_matrix[1:5,1:5]
     ## A2M      6.027058e-04 5.996617e-04 5.164365e-04 4.517236e-04 4.590521e-04
     ## A2M-AS1  8.898724e-05 8.243341e-05 7.484018e-05 4.912514e-05 5.120439e-05
 
+    ##                 CXCL1        CXCL2        CXCL3        CXCL5         PPBP
+    ## A1BG     3.534343e-04 4.041324e-04 3.729920e-04 3.080640e-04 2.628388e-04
+    ## A1BG-AS1 1.650894e-04 1.509213e-04 1.583594e-04 1.317253e-04 1.231819e-04
+    ## A1CF     5.787175e-04 4.596295e-04 3.895907e-04 3.293275e-04 3.211944e-04
+    ## A2M      6.027058e-04 5.996617e-04 5.164365e-04 4.517236e-04 4.590521e-04
+    ## A2M-AS1  8.898724e-05 8.243341e-05 7.484018e-05 4.912514e-05 5.120439e-05
+
 ``` r
 lr_network = readRDS("lr_network.rds")
 head(lr_network)
 ```
+
+    ## # A tibble: 6 x 4
+    ##   from  to    source         database
+    ##   <chr> <chr> <chr>          <chr>   
+    ## 1 CXCL1 CXCR2 kegg_cytokines kegg    
+    ## 2 CXCL2 CXCR2 kegg_cytokines kegg    
+    ## 3 CXCL3 CXCR2 kegg_cytokines kegg    
+    ## 4 CXCL5 CXCR2 kegg_cytokines kegg    
+    ## 5 PPBP  CXCR2 kegg_cytokines kegg    
+    ## 6 CXCL6 CXCR2 kegg_cytokines kegg
 
     ## # A tibble: 6 x 4
     ##   from  to    source         database
@@ -350,7 +373,7 @@ p_ligand_target_network = vis_ligand_target %>% make_heatmap_ggplot("Prioritized
 p_ligand_target_network
 ```
 
-![](workshop_tuesday_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
+![](workshop_tuesday_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
 
 Next the targets of active ligands are defined.
 
@@ -396,7 +419,7 @@ p_ligand_receptor_network = vis_ligand_receptor_network %>% t() %>% make_heatmap
 p_ligand_receptor_network
 ```
 
-![](workshop_tuesday_files/figure-gfm/unnamed-chunk-44-1.png)<!-- -->
+![](workshop_tuesday_files/figure-gfm/unnamed-chunk-45-1.png)<!-- -->
 
 The targets are restricted to highly confident curated interactions
 
@@ -444,7 +467,7 @@ p_ligand_receptor_network_strict = vis_ligand_receptor_network_strict %>% t() %>
 p_ligand_receptor_network_strict
 ```
 
-![](workshop_tuesday_files/figure-gfm/unnamed-chunk-52-1.png)<!-- -->
+![](workshop_tuesday_files/figure-gfm/unnamed-chunk-53-1.png)<!-- -->
 
 <b>Calculate fold change of ligands</b> in sender clusters
 
@@ -482,7 +505,7 @@ p_ligand_lfc = p_ligand_lfc + scale_fill_gradientn(colors = c("midnightblue","bl
 p_ligand_lfc
 ```
 
-![](workshop_tuesday_files/figure-gfm/unnamed-chunk-57-1.png)<!-- -->
+![](workshop_tuesday_files/figure-gfm/unnamed-chunk-59-1.png)<!-- -->
 
 <b> Visualization </b> of the complete results
 
@@ -527,6 +550,9 @@ combined_plot = cowplot::plot_grid(figures_without_legend, legends, rel_heights 
 combined_plot
 ```
 
-![](workshop_tuesday_files/figure-gfm/unnamed-chunk-61-1.png)<!-- -->
+![](workshop_tuesday_files/figure-gfm/unnamed-chunk-63-1.png)<!-- -->
 
-We began with this dataset as a toy example but it is interesting to see that `EDN1` has been noted to play a role in Interferon Beta response in the following [paper](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0062366).
+We began with this dataset as a toy example but it is interesting to see
+that `EDN1` has been noted to play a role in Interferon Beta response in
+the following
+[paper](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0062366).
